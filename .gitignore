@@ -1,0 +1,8 @@
+# .gitignore
+*.pdf
+*.png
+*.msh
+*.txt
+*.csv
+*.vtu
+__pycache__/

@@ -1,0 +1,91 @@
+load "iovtk"
+load "gmsh"
+
+verbosity = 0;
+
+real MMF = 40.0;
+real mu0 = 4.0 * pi * 1e-7;
+real nu0 = 1.0 / mu0;
+
+int idAir = 1;
+int idCoilOut = 2;
+int idCoilIn = 3;
+int idLegR = 4;
+int idLegL = 5;
+int idLegT = 6;
+int idLegB = 7;
+
+int idDirichlet = 8;
+
+mesh Th = gmshload("temp.msh");
+
+func nu1 = (region == idLegR || region == idLegL || region == idLegT || region == idLegB) ? (nu0/20000.0) : nu0;
+func nu2 = (region == idLegR || region == idLegL || region == idLegT || region == idLegB) ? (nu0/1000.0) : nu0;
+
+real[int] thetaVal(8);
+
+thetaVal[idLegR] = pi / 2.0;
+thetaVal[idLegL] = pi / 2.0;
+thetaVal[idLegT] = 0.0;
+thetaVal[idLegB] = 0.0;
+
+func theta = thetaVal[region];
+
+func nu11 = nu1 * cos(theta)^2 + nu2 * sin(theta)^2;
+func nu22 = nu1 * sin(theta)^2 + nu2 * cos(theta)^2;
+func nu12 = (nu1 - nu2) * sin(theta) * cos(theta);
+
+fespace Vh(Th, P2);
+Vh A, v;
+
+real J0 = MMF / (int2d(Th, idCoilIn)(1.0));
+
+func J = (region == idCoilOut) ? J0 : ( (region == idCoilIn) ? -J0 : 0.0 );
+
+// Bilinear form
+varf a(A, v) =
+    int2d(Th)(
+        nu11 * dy(A) * dy(v) 
+      - nu12 * (dx(A) * dy(v) + dy(A) * dx(v)) 
+      + nu22 * dx(A) * dx(v)
+    )
+  + on(idDirichlet, A=0);
+
+// Linear form
+varf ell(A, v) =
+    int2d(Th)(
+        J * v
+    )
+  + on(idDirichlet, A=0);
+
+matrix Kmat = a(Vh, Vh, solver=sparsesolver);
+real[int] ellVec = ell(0, Vh);
+
+A[] = Kmat^-1 * ellVec;
+
+real Wm = int2d(Th)(
+    0.5 * ( nu11 * dy(A)^2 - 2.0 * nu12 * dx(A) * dy(A) + nu22 * dx(A)^2 )
+);
+
+real Perm = (2.0 * Wm) / (MMF^2);
+
+cout << "##############################" << endl;
+cout << "--- Parameters ---" << endl;
+cout << "MMF (N*I):       " << MMF << " A-turns" << endl;
+cout << "Current Density: " << J0 << " A/m^2" << endl;
+cout << endl;
+cout << "--- Results ---" << endl;
+cout << "Magnetic Energy: " << Wm << " Joules" << endl;
+cout << "Permeance:       " << 1000.0 * Perm << " mWb/A-turns" << endl;
+cout << "##############################" << endl;
+
+fespace Vh0(Th, P0);
+Vh0 RegionId = region;
+
+fespace VhDC(Th, P1dc);
+VhDC Bmag = sqrt(dx(A)^2 + dy(A)^2);
+
+int[int] Order = [1, 1, 0];
+savevtk("results.vtu", Th, A, Bmag, RegionId, dataname="A Bmag Region", order=Order);
+
+cout << "Exported to results.vtu." << endl;
