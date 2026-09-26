@@ -37,4 +37,4 @@ FreeFem++ freefem_solver.edp
 ```
 
 **3. Visualização:**
-Ambos os solvers exportam arquivos `.vtk` ou `.vtu`. Basta abri-los no **ParaView** para visualizar a distribuição do campo magnético e as linhas de fluxo.
+Ambos os solvers exportam arquivos `.vtu`. Basta abri-los no **ParaView** para visualizar as linhas e intensidade da densidade de fluxo magnético.
